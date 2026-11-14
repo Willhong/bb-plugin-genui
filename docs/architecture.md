@@ -4,23 +4,17 @@ The internals behind [the README](../README.md): how agents learn the language, 
 
 ## From instructions to a rendered block
 
-1. Sessions whose replies a person reads get four instruction sections from
+1. Sessions whose replies a person reads get two instruction sections from
    `instructions.ts`. Threads spawned by another agent get none, and neither
    do threads run by plugins other than side chat (for example workflows),
    except the subthreads `bb genui ask` opens to try a prompt.
-   - `UI_REFERENCE` (the syntax; the Layout, Content, Data and Project
-     signatures, generated from the catalog; when to write ```app) rides on
-     the optional `check_ui` tool's instructions, and `UI_REFERENCE_MORE`
-     (Inputs, Widgets, Media, Dev, Manage, the icon names) on the optional
-     `ui_examples` tool's. BB places tool sections first.
-   - `CODE_WORK_INSTRUCTIONS` (`bb.agents.contributeInstructions`) comes
-     next: for each kind of engineering or management output, the command
-     that saves it and the component that shows it, with examples, and the
-     Evidence group's signatures (the reference sections are full). Replies
-     after a task are where models fall back to pasted output and markdown
-     tables. A contribution only gets the thread id, so it goes to the
-     threads `configure` last chose; BB resolves `configure` first within a
-     session's resolution.
+   - `UI_REFERENCE` rides on the optional `check_ui` tool's instructions;
+     BB places tool sections first. It has the syntax, the full signatures
+     of the components replies use most (`CORE_COMPONENTS`: counted over a
+     month of real replies, plus the inputs a question or calculator needs),
+     every other component by name only, the actions, how Load and `source:`
+     work, and when to write ```app. Signatures are generated from the
+     catalog; a couple of long summaries are shortened (`BRIEF_SUMMARIES`).
    - `AGENT_INSTRUCTIONS` (`bb.agents.configure`) comes last, closest to the
      conversation. It says what the user wants shown (anything better seen
      or used than read) and that a markdown table, numbered steps, pasted
@@ -28,25 +22,46 @@ The internals behind [the README](../README.md): how agents learn the language, 
      prose in the agent's own words, never a lone sentence over a card; and
      that a block is skipped only when the whole reply is a few sentences
      with nothing to see, "in doubt, add the block". A shape list names a
-     component for every kind of content. Only the message that ends the
-     turn may hold a block: progress notes, thinking and tool input stay
-     plain text, and nothing asks the user to decide mid-turn. Questions go
-     in one Form or one run of Buttons (see 6 below). "Read in BB, not a
-     terminal" is there for Claude Code, whose own system prompt says replies
-     show as markdown in a terminal. Examples here are what moves models:
-     the same calculator example stopped being followed when it sat in an
-     earlier section. While web lookups are off, `AGENT_INSTRUCTIONS_WEB_OFF`
-     swaps the Map example for a line saying so.
+     component for every kind of content, with short call forms for the
+     name-only ones it most needs. A paragraph on replies after code work
+     maps each kind of tool output to its component (Tests, Logs,
+     StackTrace, Findings, Acceptance, Benchmark), read with Load from the
+     file the agent saved. Only the message that ends the turn may hold a
+     block: progress notes, thinking and tool input stay plain text, and
+     nothing asks the user to decide mid-turn. Questions go in one Form or
+     one run of Buttons (see 6 below). "Read in BB, not a terminal" is
+     there for Claude Code, whose own system prompt says replies show as
+     markdown in a terminal. Examples here are what moves models: the same
+     calculator example stopped being followed when it sat in an earlier
+     section. While web lookups are off, `AGENT_INSTRUCTIONS_WEB_OFF` swaps
+     the Map line for a line saying so.
+   - Everything else comes from `ui_examples` on request: a named
+     component's signature, notes, the command that saves its data and its
+     gallery examples; `["all"]` returns `FULL_REFERENCE` (every signature,
+     the icon names); `["app"]` the app contract.
+   Until 0.3.2 there were four sections (the two reference halves, a
+   code-work section through `contributeInstructions`, and the rules),
+   16,060 characters with BB's headers; the two now take about 7,800. The
+   split was kept after a comparison on 32 scenarios rebuilt from real
+   threads (27 that call for a block, 5 short questions that don't), run
+   through `claude -p` with the old and new sections and the real tools,
+   four times each on Sonnet 5.5 and Opus 5.5. On Sonnet the new text did
+   better at deciding when to write a block (76% to 82% of runs), at
+   writing blocks that pass `check_ui`'s checks (94% to 97%) and at picking
+   the expected component (76% to 79%); on Opus it was within a run or two
+   of the old one on each (92% to 91%, 97% to 96%, 99% to 98%). Agents
+   rarely call `ui_examples` (Claude Code loads plugin tools lazily), so a
+   component that is only named gets used less than one whose signature is
+   shown; that is why the shape list carries call forms. A variant that
+   kept the code-work section with full signatures (about 8,900
+   characters) was no better.
    BB refuses a tool whose instructions pass 4,096 characters (the plugin
    then fails to reload) and truncates the other sections there;
-   `instructions.test.ts` fails the build past that and compiles every
-   example. The four sections and the two tools cost 6,432 input tokens
-   per session (measured against a session without them); about 42% is the
-   component signatures, 42% the guidance. Formats a component can Load are
-   listed once, in the code-work section, not again in its summary. BB's
-   acp provider sends the instructions again, with every other plugin's,
-   each time it starts a new agent process for the thread, and earlier
-   copies stay in the context until it is compacted.
+   `instructions.test.ts` fails the build past that or past 8,000 for the
+   two together, and compiles every example. BB's acp provider sends the
+   instructions again, with every other plugin's, each time it starts a new
+   agent process for the thread, and earlier copies stay in the context
+   until it is compacted.
 2. The agent writes the UI inline in its reply, so a UI costs no extra model
    call:
    - ```ui blocks use the spec language, whose components are listed in
@@ -73,9 +88,10 @@ The internals behind [the README](../README.md): how agents learn the language, 
      an error; dialogs, links that can't open, indexedDB, `genui` calls
      outside a function and 100vh heights are warnings. Only errors set
      `isError`. Apps may be 100,000 characters; ```ui specs keep 20,000.
-   - `ui_examples` is optional: it returns the gallery examples of the
-     components named (`examples.ts`), with their data files; "app"
-     returns the app guide.
+   - `ui_examples` is optional: it returns the signature and gallery
+     examples of the components named (`examples.ts`), with their data files
+     and, for components that show tool output, the command that saves it;
+     "all" returns every signature and "app" the app guide.
 3. Rendering depends on the BB version:
    - With BB's merged `experimental_codeFenceRenderer` slot (#5387), BB
      hands each fence to `ui/SlotFence.tsx` with `code`, `language`,
@@ -453,7 +469,7 @@ the instructions list it.
   t = 1.5, parses each shader pass with `core/glsl-check.ts` (errors by
   pass and line; server only, so the GLSL parser stays out of the page) and
   reports model, environment and texture files it can't read. The
-  instructions carry one brief line; `ui_examples` returns the full API.
+  instructions only name Scene and Shader; `ui_examples` returns the full API.
   Scene renders with three.js (`ui/components/sceneWorld.ts`): a key light
   with soft shadows on an invisible catcher, bloom from `glow`, physical
   glass with dispersion, PMREM environments, objects reused by index across

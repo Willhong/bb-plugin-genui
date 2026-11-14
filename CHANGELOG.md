@@ -4,6 +4,12 @@ What changed in each version of the Generative UI plugin for BB. Update an insta
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- **Half the instructions per session.** Sessions whose replies you read get two instruction sections instead of four: about 7,800 characters instead of 16,060, about 3,350 tokens fewer per session. Every session still gets the syntax, the signatures of the components replies use most, when to use which component, how questions work and the worked examples; the other components are named, and their signatures, notes and save commands come from `ui_examples`. `ui_examples(["all"])` lists every signature. The code-work guidance is now part of the main section.
+- Kept after a comparison on 32 scenarios rebuilt from real threads, four runs each on Sonnet 5.5 and Opus 5.5 with the old and new text: Sonnet decided better when to write a block and wrote more blocks that pass `check_ui`'s checks; Opus stayed within a run or two of before. An agent writing a component the session only names for the first time may call `ui_examples` once more.
+
 ## [0.3.2] - 2026-11-07
 
 ### Fixed

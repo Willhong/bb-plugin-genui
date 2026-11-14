@@ -15,7 +15,7 @@ Once the plugin is on, agents in the threads you read learn the components and p
 ## Requirements and costs
 
 - BB 0.45 or later.
-- About 6,400 tokens of instructions in each session whose replies you read. Worker threads that agents spawn get none.
+- About 3,100 tokens of instructions in each session whose replies you read (6,400 until 0.3.2). Worker threads that agents spawn get none.
 - Web lookups, on by default and switchable in the plugin's settings: photo search on Wikimedia Commons, lead photos of Wikipedia articles a map names, place names through Photon and map tiles from OpenStreetMap. These services see your IP address and what is looked up.
 - Components read files only from the thread's workspace, its thread storage and /tmp.
 - Uses BB's experimental code-fence renderer slot where available. Older BB versions use a DOM overlay with a 1.5-second settlement heuristic; changes to BB's page layout can show those blocks as code until the plugin catches up. On the slot path, sandboxed apps draw their markup while streaming and run only after their fence closes.

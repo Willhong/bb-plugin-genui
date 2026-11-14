@@ -1,9 +1,9 @@
 // bb-plugin-genui backend. Agents write ```ui and ```app blocks straight into
 // their replies, so a UI costs no extra model call. The backend:
-// - decides which sessions are told about the blocks, in three sections: the
-//   language reference (the instructions of the optional check_ui and
-//   ui_examples tools, which let an agent verify a block or see working
-//   examples first) and the rules with worked examples (configure instructions),
+// - decides which sessions are told about the blocks, in two sections: the
+//   language reference (the instructions of the optional check_ui tool, which
+//   lets an agent verify a block first) and the rules with worked examples
+//   (configure instructions); ui_examples hands out the rest on request,
 // - loads the files specs reference with Load(path) and Snippet(path), and
 //   the images Image(path) shows,
 // - renders replies as plain markdown for clients that don't run the UI
@@ -48,7 +48,7 @@ import {
   type EnvironmentsResult,
 } from "./core/project";
 import { examplesReport } from "./examples";
-import { AGENT_INSTRUCTIONS, AGENT_INSTRUCTIONS_WEB_OFF, CODE_WORK_INSTRUCTIONS, UI_REFERENCE, UI_REFERENCE_MORE } from "./instructions";
+import { AGENT_INSTRUCTIONS, AGENT_INSTRUCTIONS_WEB_OFF, UI_REFERENCE } from "./instructions";
 import { foundImageSchema, wikiPhotoSchema } from "./web/commons";
 import { locatedSchema } from "./web/geocode";
 import { createWebLookups, MAX_TILE_ZOOM } from "./web/lookups";
@@ -57,9 +57,6 @@ import { createEnvironmentsSource } from "./project/environments";
 import type { EnvironmentDetailResult } from "./core/environments";
 
 const UI_ID = /^[a-z0-9]{10}$/;
-
-/** Thread ids kept for the code-work instruction section (see configure). */
-const MAX_PERSON_THREADS = 10_000;
 
 /** Declared here so BB lists it; the page reads it (ui/components/motion.ts). */
 export const MOTION_SETTINGS = {
@@ -267,10 +264,9 @@ export default async function plugin(bb: BbPluginApi) {
   bb.agents.registerTool({
     name: "ui_examples",
     description:
-      "Returns working ```ui examples of the components you name (from the plugin's gallery), with each component's signature. Optional; use it for a component you haven't written before.",
-    instructions: UI_REFERENCE_MORE,
+      "Returns each named component's signature, working ```ui examples from the plugin's gallery and, for components that show tool output, the command that saves it. Call it before you first write a component the reference lists by name only. [\"all\"] lists every component's signature; [\"app\"] returns the ```app page contract.",
     parameters: z.object({
-      components: z.array(z.string().min(1).max(40)).min(1).max(6).describe('Component names, e.g. ["Map", "Chart"]'),
+      components: z.array(z.string().min(1).max(40)).min(1).max(6).describe('Component names, e.g. ["Map", "Chart"]; or ["all"], or ["app"]'),
     }),
     presentation: { label: { pending: "Reading UI examples", completed: "Read UI examples" }, suppress: true },
     async execute({ components }) {
@@ -279,11 +275,6 @@ export default async function plugin(bb: BbPluginApi) {
     },
   });
 
-  // Threads configure last found to have a person reading their replies. BB
-  // resolves configure before it asks instruction contributors, within the
-  // same session resolution, so the code-work section below reaches exactly
-  // the sessions that get the other three. Bounded; oldest forgotten first.
-  const personThreads = new Set<string>();
   bb.agents.configure((context) => {
     // Only sessions whose replies a person reads in chat: not threads another
     // agent spawned (their reply goes back to that agent) and not threads a
@@ -293,14 +284,10 @@ export default async function plugin(bb: BbPluginApi) {
       context.pluginMetadata.audience === "person" ||
       (context.thread.parentThreadId === null &&
         (context.origin.pluginId === null || context.origin.pluginId === "side-chat"));
-    personThreads.delete(context.thread.id);
     if (!forPerson) return { tools: [], skills: [] };
-    personThreads.add(context.thread.id);
-    if (personThreads.size > MAX_PERSON_THREADS) personThreads.delete(personThreads.values().next().value!);
     const instructions = web.isOn() ? AGENT_INSTRUCTIONS : AGENT_INSTRUCTIONS_WEB_OFF;
     return { tools: ["check_ui", "ui_examples"], skills: [], instructions };
   });
-  bb.agents.contributeInstructions(({ threadId }) => (personThreads.has(threadId) ? CODE_WORK_INSTRUCTIONS : null));
 
   bb.rpc.register(rpcContract, {
     async get_ui({ id }) {

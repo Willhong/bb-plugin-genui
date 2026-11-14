@@ -2,11 +2,14 @@
 // (gallery/<Component>.ui and gallery/<Component>-<variant>.ui). They are the
 // specs the gallery page renders, so an example the tool returns is known to
 // compile and draw. "app" returns the ```app guide instead, with the example
-// pages in gallery/app/ (appLint.test.ts keeps them lint-clean).
+// pages in gallery/app/ (appLint.test.ts keeps them lint-clean), and "all"
+// every component's signature (instructions.ts FULL_REFERENCE), since the
+// session prompt lists most components by name only.
 import { readFile } from "node:fs/promises";
 import { collectLoads, compile } from "./core";
 import { COMPONENTS, componentSignature, type ComponentName } from "./core/catalog";
 import { listGallery, loadGalleryFile, packagePath, readGallerySpec } from "./data-source";
+import { FULL_REFERENCE } from "./instructions";
 
 /**
  * What a ```app page can rely on (the bootstrap in ui/appDocument.ts runs before
@@ -145,7 +148,7 @@ async function describe(name: string): Promise<string> {
   return parts.join("\n");
 }
 
-/** The tool's text: each requested component's signature and its examples, or the app guide for "app". */
+/** The tool's text: each requested component's signature and its examples, the app guide for "app", every signature for "all". */
 export async function examplesReport(components: readonly string[]): Promise<{ ok: boolean; text: string }> {
   const names = await listGallery();
   const sections: string[] = [];
@@ -153,6 +156,10 @@ export async function examplesReport(components: readonly string[]): Promise<{ o
   for (const component of components) {
     if (component.toLowerCase() === "app") {
       sections.push(await appGuide());
+      continue;
+    }
+    if (component.toLowerCase() === "all") {
+      sections.push(FULL_REFERENCE);
       continue;
     }
     if (!isComponentName(component)) {
